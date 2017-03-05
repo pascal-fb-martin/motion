@@ -513,7 +513,7 @@ static void motion_detected(struct context *cnt, int dev, struct image_data *img
              * on_motion_detected_commend so it must be done now.
              */
             mystrftime(cnt, cnt->text_event_string, sizeof(cnt->text_event_string),
-                       cnt->conf.text_event, &img->timestamp_tv, NULL, 0, 0);
+                       cnt->conf.text_event, &img->timestamp_tv, NULL, 0);
 
             /* EVENT_FIRSTMOTION triggers on_event_start_command and event_ffmpeg_newfile */
             event(cnt, EVENT_FIRSTMOTION, img->image, NULL, NULL,
@@ -604,7 +604,7 @@ static void process_image_ring(struct context *cnt, unsigned int max_images)
                     t = "Other";
 
                 mystrftime(cnt, tmp, sizeof(tmp), "%H%M%S-%q",
-                           &cnt->imgs.image_ring[cnt->imgs.image_ring_out].timestamp_tv, NULL, 0, 0);
+                           &cnt->imgs.image_ring[cnt->imgs.image_ring_out].timestamp_tv, NULL, 0);
                 draw_text(cnt->imgs.image_ring[cnt->imgs.image_ring_out].image, 10, 20,
                           cnt->imgs.width, tmp, cnt->conf.text_double);
                 draw_text(cnt->imgs.image_ring[cnt->imgs.image_ring_out].image, 10, 30,
@@ -1018,7 +1018,7 @@ static int motion_init(struct context *cnt)
         if ((!strcmp(cnt->conf.database_type, "mysql")) && (cnt->conf.database_dbname)) {
             // close database to be sure that we are not leaking
             mysql_close(cnt->database);
-            cnt->current_event_id = 0;
+            cnt->database_event_id = 0;
 
             cnt->database = mymalloc(sizeof(MYSQL));
             mysql_init(cnt->database);
@@ -1311,7 +1311,7 @@ static void motion_cleanup(struct context *cnt)
 #ifdef HAVE_MYSQL
         if ( (!strcmp(cnt->conf.database_type, "mysql")) && (cnt->conf.database_dbname)) {
             mysql_close(cnt->database);
-            cnt->current_event_id = 0;
+            cnt->database_event_id = 0;
         }
 #endif /* HAVE_MYSQL */
 
@@ -1708,7 +1708,7 @@ static int mlp_capture(struct context *cnt){
             tv1.tv_sec=cnt->connectionlosttime;
             tv1.tv_usec = 0;
             memset(cnt->current_image->image, 0x80, cnt->imgs.size);
-            mystrftime(cnt, tmpout, sizeof(tmpout), tmpin, &tv1, NULL, 0, 0);
+            mystrftime(cnt, tmpout, sizeof(tmpout), tmpin, &tv1, NULL, 0);
             draw_text(cnt->current_image->image, 10, 20 * cnt->text_size_factor, cnt->imgs.width,
                       tmpout, cnt->conf.text_double);
 
@@ -1979,7 +1979,7 @@ static void mlp_overlay(struct context *cnt){
     /* Add text in lower left corner of the pictures */
     if (cnt->conf.text_left) {
         mystrftime(cnt, tmp, sizeof(tmp), cnt->conf.text_left,
-                   &cnt->current_image->timestamp_tv, NULL, 0, 0);
+                   &cnt->current_image->timestamp_tv, NULL, 0);
         draw_text(cnt->current_image->image, 10, cnt->imgs.height - 10 * cnt->text_size_factor,
                   cnt->imgs.width, tmp, cnt->conf.text_double);
     }
@@ -1987,7 +1987,7 @@ static void mlp_overlay(struct context *cnt){
     /* Add text in lower right corner of the pictures */
     if (cnt->conf.text_right) {
         mystrftime(cnt, tmp, sizeof(tmp), cnt->conf.text_right,
-                   &cnt->current_image->timestamp_tv, NULL, 0, 0);
+                   &cnt->current_image->timestamp_tv, NULL, 0);
         draw_text(cnt->current_image->image, cnt->imgs.width - 10,
                   cnt->imgs.height - 10 * cnt->text_size_factor,
                   cnt->imgs.width, tmp, cnt->conf.text_double);
@@ -3353,6 +3353,11 @@ static void mystrftime_long (const struct context *cnt,
         sprintf(out, "%*d", width, cnt->movie_fps);
         return;
     }
+    if (SPECIFIERWORD("dbeventid")) {
+        sprintf(out, "%*llu", width, cnt->database_event_id);
+        return;
+    }
+
     // Not a valid modifier keyword. Log the error and ignore.
     MOTION_LOG(ERR, TYPE_ALL, NO_ERRNO,
         "%s: invalid format specifier keyword %*.*s", l, l, word);
@@ -3384,7 +3389,7 @@ static void mystrftime_long (const struct context *cnt,
  * Returns: number of bytes written to the string s
  */
 size_t mystrftime(const struct context *cnt, char *s, size_t max, const char *userformat,
-                  const struct timeval *tv1, const char *filename, int sqltype, unsigned long long event_id)
+                  const struct timeval *tv1, const char *filename, int sqltype)
 {
     char formatstring[PATH_MAX] = "";
     char tempstring[PATH_MAX] = "";
@@ -3505,13 +3510,6 @@ size_t mystrftime(const struct context *cnt, char *s, size_t max, const char *us
             case 'n': // sqltype
                 if (sqltype)
                     sprintf(tempstr, "%*d", width, sqltype);
-                else
-                    ++pos_userformat;
-                break;
-
-            case 'e': // event_id
-                if (event_id)
-                    sprintf(tempstr, "%llu", event_id);
                 else
                     ++pos_userformat;
                 break;
