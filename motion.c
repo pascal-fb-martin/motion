@@ -3597,12 +3597,33 @@ int myfclose(FILE* fh)
  *
  * host    Replaced with the name of the local machine (see gethostname(2)).
  * fps     Equivalent to %fps.
+ *
+ * Environment variables are also supported:
+ *
+ *  % { $ name }
+ *
+ * (For example: "%{$HOME}".)
+ *
+ * Note that compound expressions are not supported, i.e. "%{$HOME/folder}"
+ * is not valid. Use "%{$HOME}/folder" instead.
+ *
+ * It was a choice not to use just "${HOME}" for compatibility reasons:
+ * '$' is not a special character in motion. Thus the convoluted syntax.
  */
 static void mystrftime_long (const struct context *cnt,
                              int width, const char *word, int l, char *out)
 {
 #define SPECIFIERWORD(k) ((strlen(k)==l) && (!strncmp (k, word, l)))
 
+    if (*word == '$') {
+        const char *name = strndup (word+1, l-1);
+        const char *value = getenv(name);
+        free(name);
+        if (value) {
+           snprintf (out, PATH_MAX, "%*s", width, value);
+           return;
+        }
+    }
     if (SPECIFIERWORD("host")) {
         snprintf (out, PATH_MAX, "%*s", width, cnt->hostname);
         return;
